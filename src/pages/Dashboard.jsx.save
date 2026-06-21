@@ -1,0 +1,609 @@
+import { Link } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { useAuth } from '../context/AuthContext'
+import { api } from '../services/api'
+
+export default function Dashboard() {
+  const { user } = useAuth()
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('darkMode') === 'true'
+  })
+  
+  // ===== POSTS =====
+  const [posts, setPosts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [newComment, setNewComment] = useState({})
+  const [showComments, setShowComments] = useState({})
+  const [newPost, setNewPost] = useState('')
+  const [uploadedImage, setUploadedImage] = useState(null)
+  const [uploadedVideo, setUploadedVideo] = useState(null)
+  const imageInputRef = useRef(null)
+  const videoInputRef = useRef(null)
+
+  // ===== STORIES =====
+  const [stories, setStories] = useState([
+    { id: 1, user: 'Aminata', avatar: '👩‍🎓', color: 'bg-pink-500', viewed: false },
+    { id: 2, user: 'Moussa', avatar: '👨‍💻', color: 'bg-blue-500', viewed: false },
+    { id: 3, user: 'Sarah', avatar: '👩‍🎓', color: 'bg-green-500', viewed: false },
+    { id: 4, user: 'Kevin', avatar: '👨‍🎓', color: 'bg-purple-500', viewed: false },
+    { id: 5, user: 'Club Tech', avatar: '💻', color: 'bg-orange-500', viewed: false },
+  ])
+  const [showStoryModal, setShowStoryModal] = useState(false)
+  const [storyIndex, setStoryIndex] = useState(0)
+
+  // ===== VIDÉOS EN DIRECT =====
+  const [liveVideos, setLiveVideos] = useState([
+    { id: 1, title: 'Session de code Python', author: 'Prof. Jean', viewers: 128, duration: '45:20' },
+    { id: 2, title: 'Conférence IA & Futur', author: 'Amphi A', viewers: 342, duration: '1:12:45' },
+    { id: 3, title: 'Révision Mathématiques', author: 'Groupe L2', viewers: 89, duration: '32:15' },
+    { id: 4, title: 'Design UI/UX', author: 'Club Design', viewers: 56, duration: '1:12:45' },
+  ])
+  const [showVideoModal, setShowVideoModal] = useState(null)
+
+  // ===== SONDAGE =====
+  const [showPollModal, setShowPollModal] = useState(false)
+  const [pollQuestion, setPollQuestion] = useState('')
+  const [pollOptions, setPollOptions] = useState(['', ''])
+
+  // ===== ÉVÉNEMENT =====
+  const [showEventModal, setShowEventModal] = useState(false)
+  const [eventTitle, setEventTitle] = useState('')
+  const [eventDate, setEventDate] = useState('')
+  const [eventTime, setEventTime] = useState('')
+  const [eventLocation, setEventLocation] = useState('')
+
+  // ===== DATE =====
+  const now = new Date()
+  const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+  const formattedDate = now.toLocaleDateString('fr-FR', dateOptions)
+
+  // ===== EFFETS =====
+  useEffect(() => {
+    localStorage.setItem('darkMode', darkMode)
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [darkMode])
+
+  useEffect(() => {
+    loadPosts()
+  }, [])
+
+  // ===== FONCTIONS =====
+  const loadPosts = async () => {
+    try {
+      const data = await api.getPosts()
+      setPosts(data)
+      setLoading(false)
+    } catch (error) {
+      console.error('Erreur chargement:', error)
+      setLoading(false)
+    }
+  }
+
+  const handleCreatePost = async () => {
+    if (!newPost.trim() && !uploadedImage && !uploadedVideo) {
+      alert('Veuillez écrire ou ajouter un fichier')
+      return
+    }
+    
+    const postData = {
+      author: user?.name || 'Utilisateur',
+      authorIcon: '👩‍🎓',
+      authorColor: 'bg-green-100',
+      group: '👥 L3 Informatique',
+      content: newPost || 'Nouvelle publication',
+      likes: 0,
+      liked: false,
+      comments: [],
+      image: uploadedImage || null,
+      video: uploadedVideo || null
+    }
+    
+    try {
+      await api.createPost(postData)
+      setNewPost('')
+      setUploadedImage(null)
+      setUploadedVideo(null)
+      loadPosts()
+    } catch (error) {
+      console.error('Erreur création post:', error)
+    }
+  }
+
+  const handleLike = async (postId) => {
+    try {
+      const updated = await api.likePost(postId)
+      setPosts(posts.map(p => p._id === postId ? updated : p))
+    } catch (error) {
+      console.error('Erreur like:', error)
+    }
+  }
+
+  const handleAddComment = async (postId) => {
+    if (!newComment[postId]?.trim()) return
+    
+    try {
+      const updated = await api.commentPost(postId, {
+        user: user?.name || 'Utilisateur',
+        text: newComment[postId]
+      })
+      setPosts(posts.map(p => p._id === postId ? updated : p))
+      setNewComment({ ...newComment, [postId]: '' })
+    } catch (error) {
+      console.error('Erreur commentaire:', error)
+    }
+  }
+
+  const toggleComments = (postId) => {
+    setShowComments({ ...showComments, [postId]: !showComments[postId] })
+  }
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode)
+  }
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        setUploadedImage(event.target.result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleVideoUpload = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      const url = URL.createObjectURL(file)
+      setUploadedVideo({ name: file.name, url: url })
+    }
+  }
+
+  // ===== SONDAGE =====
+  const handlePollSubmit = () => {
+    if (!pollQuestion.trim() || pollOptions.some(opt => !opt.trim())) {
+      alert('Veuillez remplir tous les champs')
+      return
+    }
+    const pollPost = {
+      author: user?.name || 'Utilisateur',
+      authorIcon: '👩‍🎓',
+      authorColor: 'bg-green-100',
+      group: '📊 Sondage',
+      content: '📊 Sondage : ' + pollQuestion,
+      poll: { question: pollQuestion, options: pollOptions },
+      likes: 0,
+      liked: false,
+      comments: []
+    }
+    api.createPost(pollPost).then(() => {
+      setPollQuestion('')
+      setPollOptions(['', ''])
+      setShowPollModal(false)
+      loadPosts()
+    })
+  }
+
+  const addPollOption = () => {
+    setPollOptions([...pollOptions, ''])
+  }
+
+  const updatePollOption = (index, value) => {
+    const newOptions = [...pollOptions]
+    newOptions[index] = value
+    setPollOptions(newOptions)
+  }
+
+  // ===== ÉVÉNEMENT =====
+  const handleEventSubmit = () => {
+    if (!eventTitle.trim() || !eventDate || !eventTime) {
+      alert('Veuillez remplir tous les champs')
+      return
+    }
+    const eventPost = {
+      author: user?.name || 'Utilisateur',
+      authorIcon: '👩‍🎓',
+      authorColor: 'bg-green-100',
+      group: '📅 Événement',
+      content: '📅 Événement : ' + eventTitle,
+      event: { title: eventTitle, date: eventDate, time: eventTime, location: eventLocation || 'Non spécifié' },
+      likes: 0,
+      liked: false,
+      comments: []
+    }
+    api.createPost(eventPost).then(() => {
+      setEventTitle('')
+      setEventDate('')
+      setEventTime('')
+      setEventLocation('')
+      setShowEventModal(false)
+      loadPosts()
+    })
+  }
+
+  // ===== STORIES =====
+  const openStory = (index) => {
+    setStoryIndex(index)
+    setShowStoryModal(true)
+    const updatedStories = [...stories]
+    updatedStories[index].viewed = true
+    setStories(updatedStories)
+  }
+
+  // ===== CLASSES =====
+  const bgCard = darkMode ? 'dark:bg-gray-800' : 'bg-white'
+  const bgCardHover = darkMode ? 'dark:border-gray-700' : 'border-blue-100/50'
+  const bgInput = darkMode ? 'dark:bg-gray-700 dark:border-gray-600 dark:text-white' : 'bg-blue-50/50 border-blue-200/50'
+  const bgNav = darkMode ? 'dark:bg-gray-800/70 dark:border-gray-700' : 'bg-white/70 border-blue-100/50'
+  const textPrimary = darkMode ? 'dark:text-white' : 'text-gray-900'
+  const textSecondary = darkMode ? 'dark:text-gray-300' : 'text-gray-600'
+  const textMuted = darkMode ? 'dark:text-gray-400' : 'text-gray-500'
+
+  if (loading) {
+    return (
+      <div className={`min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gray-100'} flex items-center justify-center`}>
+        <p className={`text-2xl ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>⏳ Chargement...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gradient-to-br from-blue-50 via-indigo-50/30 to-purple-50/30'}`}>
+      
+      {/* ===== BARRE DE NAVIGATION ===== */}
+      <nav className={`${bgNav} backdrop-blur-xl border-b sticky top-0 z-50 shadow-sm`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <span className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-blue-600'}`}>🏫 CampusLink</span>
+            </div>
+            <div className="hidden md:flex items-center gap-1 bg-blue-50/50 dark:bg-gray-800 rounded-2xl p-1 border border-blue-100/50 dark:border-gray-700">
+              <Link to="/dashboard" className="px-4 py-2 bg-blue-600 text-white rounded-xl font-medium text-sm">🏠 Accueil</Link>
+              <Link to="/explorer" className="px-4 py-2 text-blue-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 rounded-xl text-sm">🔍 Explorer</Link>
+              <Link to="/messages" className="px-4 py-2 text-blue-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 rounded-xl text-sm relative">💬 Messages<span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">3</span></Link>
+              <Link to="/notifications" className="px-4 py-2 text-blue-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 rounded-xl text-sm relative">🔔 Notifications<span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">12</span></Link>
+              <Link to="/groups" className="px-4 py-2 text-blue-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 rounded-xl text-sm">👥 Groupes</Link>
+              <Link to="/courses" className="px-4 py-2 text-blue-600 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-gray-700 rounded-xl text-sm">📚 Cours</Link>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={toggleDarkMode} className={`p-2 rounded-full ${darkMode ? 'bg-gray-700 text-yellow-400' : 'bg-gray-200 text-gray-700'}`}>{darkMode ? '☀️' : '🌙'}</button>
+              <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-blue-600'}`}>👋 {user?.name || 'Invité'}</span>
+              <Link to="/profile" className={`w-9 h-9 rounded-full flex items-center justify-center text-base overflow-hidden ${darkMode ? 'bg-blue-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`}>
+                {user?.avatar || '👤'}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* ===== CONTENU PRINCIPAL ===== */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        {/* ===== EN-TÊTE ===== */}
+        <div className="mb-6">
+          <h1 className={`text-2xl font-bold ${textPrimary}`}>
+            Bonjour {user?.name || 'Invité'} ! 👋
+          </h1>
+          <p className={`text-sm ${textMuted}`}>
+            {formattedDate} · Kinshasa
+          </p>
+        </div>
+
+        {/* ===== STORIES ===== */}
+        <div className={`${bgCard} rounded-2xl shadow-md border ${bgCardHover} p-4 mb-5`}>
+          <div className="flex items-center justify-between mb-3">
+            <span className={`font-semibold text-sm ${textPrimary}`}>📸 Stories</span>
+            <span className={`text-xs ${textMuted}`}>Voir toutes</span>
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {/* Ajouter story */}
+            <div className="flex flex-col items-center gap-1 cursor-pointer flex-shrink-0" onClick={() => alert('📸 Ajouter une story')}>
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-2xl text-white ring-2 ring-indigo-500 ring-offset-2 hover:scale-105 transition">
+                ➕
+              </div>
+              <span className={`text-xs ${textMuted} truncate max-w-[60px]`}>Ajouter story</span>
+            </div>
+
+            {/* Stories */}
+            {stories.map((story, index) => (
+              <div key={story.id} className="flex flex-col items-center gap-1 cursor-pointer flex-shrink-0" onClick={() => openStory(index)}>
+                <div className={`w-16 h-16 rounded-full ${story.color} flex items-center justify-center text-2xl text-white ring-2 ${story.viewed ? 'ring-gray-300 dark:ring-gray-600' : 'ring-pink-500'} ring-offset-2 hover:scale-105 transition`}>
+                  {story.avatar}
+                </div>
+                <span className={`text-xs ${textMuted} truncate max-w-[60px]`}>{story.user}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ===== QUOI DE NEUF ===== */}
+        <div className={`${bgCard} rounded-2xl shadow-md border ${bgCardHover} p-4 mb-5`}>
+          <p className={`text-sm font-medium ${textSecondary} mb-3`}>Quoi de neuf sur ton campus ?</p>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-blue-100'}`}>
+              {user?.avatar || '👤'}
+            </div>
+            <input
+              type="text"
+              placeholder="Texte"
+              value={newPost}
+              onChange={(e) => setNewPost(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleCreatePost()}
+              className={`flex-1 px-4 py-2.5 rounded-xl border ${bgInput} ${darkMode ? 'text-white' : 'text-gray-800'}`}
+            />
+          </div>
+
+          {uploadedImage && (
+            <div className="mt-3 relative">
+              <img src={uploadedImage} alt="Upload" className="max-h-48 rounded-xl" />
+              <button onClick={() => setUploadedImage(null)} className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center">✕</button>
+            </div>
+          )}
+          {uploadedVideo && (
+            <div className="mt-3 relative">
+              <video src={uploadedVideo.url} controls className="max-h-48 rounded-xl" />
+              <button onClick={() => setUploadedVideo(null)} className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center">✕</button>
+            </div>
+          )}
+
+          <div className={`flex flex-wrap gap-2 mt-3 pt-3 border-t ${darkMode ? 'border-gray-700' : 'border-blue-100/50'}`}>
+            <button onClick={() => imageInputRef.current?.click()} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'text-blue-400 hover:bg-gray-700' : 'text-blue-500 hover:bg-blue-50'}`}>📸 Photo</button>
+            <input type="file" ref={imageInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
+            
+            <button onClick={() => videoInputRef.current?.click()} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'text-blue-400 hover:bg-gray-700' : 'text-blue-500 hover:bg-blue-50'}`}>📹 Vidéo</button>
+            <input type="file" ref={videoInputRef} accept="video/*" onChange={handleVideoUpload} className="hidden" />
+            
+            <button onClick={() => setShowPollModal(true)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'text-blue-400 hover:bg-gray-700' : 'text-blue-500 hover:bg-blue-50'}`}>📊 Sondage</button>
+            
+            <button onClick={() => setShowEventModal(true)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${darkMode ? 'text-blue-400 hover:bg-gray-700' : 'text-blue-500 hover:bg-blue-50'}`}>📅 Événement</button>
+            
+            <button onClick={handleCreatePost} className="ml-auto px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">Publier</button>
+          </div>
+        </div>
+
+        {/* ===== PUBLIER UNE VIDÉO ===== */}
+        <div className={`${bgCard} rounded-2xl shadow-md border ${bgCardHover} p-4 mb-5`}>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className={`font-semibold ${textPrimary}`}>📹 Publier une vidéo</h3>
+            <span className={`text-xs ${textMuted}`}>Partage tes idées avec ta communauté</span>
+          </div>
+          <button 
+            onClick={() => videoInputRef.current?.click()}
+            className={`w-full py-3 rounded-xl border-2 border-dashed ${darkMode ? 'border-gray-600 text-gray-400 hover:border-blue-400' : 'border-blue-300 text-blue-500 hover:border-blue-500'} transition flex items-center justify-center gap-2`}
+          >
+            <span className="text-2xl">➕</span>
+            <span>Nouvelle vidéo</span>
+          </button>
+          <input type="file" ref={videoInputRef} accept="video/*" onChange={handleVideoUpload} className="hidden" />
+        </div>
+
+        {/* ===== VIDÉOS EN DIRECT ===== */}
+        <div className={`${bgCard} rounded-2xl shadow-md border ${bgCardHover} p-4 mb-5`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+              <span className={`font-semibold ${textPrimary}`}>🔴 Vidéos en ligne</span>
+            </div>
+            <span className={`text-xs ${textMuted}`}>En direct</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {liveVideos.map((video) => (
+              <div 
+                key={video.id}
+                onClick={() => setShowVideoModal(video)}
+                className={`p-3 rounded-xl cursor-pointer transition hover:scale-[1.02] ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-red-50 hover:bg-red-100'} relative`}
+              >
+                <div className="absolute top-2 left-2 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                  <span className="text-[8px] font-bold text-red-500">EN DIRECT</span>
+                </div>
+                <div className="flex items-center justify-center h-16 bg-black/10 rounded-lg mb-2">
+                  <span className="text-3xl">📹</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-red-500">{video.viewers}</span>
+                  <span className="text-[10px] text-gray-400">{video.duration}</span>
+                </div>
+                <p className={`text-xs font-medium ${textPrimary} truncate mt-1`}>{video.title}</p>
+                <p className={`text-[10px] ${textMuted}`}>{video.author}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ===== SUGGESTIONS ===== */}
+        <div className={`${bgCard} rounded-2xl shadow-md border ${bgCardHover} p-4 mb-5`}>
+          <h3 className={`font-semibold ${textPrimary} mb-3`}>🎯 Suggestions</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`p-3 rounded-xl ${darkMode ? 'bg-gray-700' : 'bg-blue-50'}`}>
+              <p className={`text-sm font-medium ${textPrimary}`}>Session de code Python</p>
+              <p className={`text-xs ${textMuted}`}>Prof. Jean</p>
+            </div>
+            <div className={`p-3 rounded-xl ${darkMode ? 'bg-gray-700' : 'bg-purple-50'}`}>
+              <p className={`text-sm font-medium ${textPrimary}`}>Conférence IA & Futur</p>
+              <p className={`text-xs ${textMuted}`}>Amphi A</p>
+            </div>
+            <div className={`p-3 rounded-xl ${darkMode ? 'bg-gray-700' : 'bg-green-50'}`}>
+              <p className={`text-sm font-medium ${textPrimary}`}>Révision Mathématiques</p>
+              <p className={`text-xs ${textMuted}`}>Groupe L2</p>
+            </div>
+            <div className={`p-3 rounded-xl ${darkMode ? 'bg-gray-700' : 'bg-pink-50'}`}>
+              <p className={`text-sm font-medium ${textPrimary}`}>Design UI/UX</p>
+              <p className={`text-xs ${textMuted}`}>Club Design</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ===== POSTS ===== */}
+        <div className="space-y-4">
+          {posts.length === 0 ? (
+            <div className={`${bgCard} rounded-2xl shadow-md border ${bgCardHover} p-10 text-center`}>
+              <p className={`${textMuted}`}>Aucun post pour le moment</p>
+              <p className={`text-sm ${textMuted}`}>Soyez le premier à publier !</p>
+            </div>
+          ) : (
+            posts.map(post => (
+              <div key={post._id} className={`${bgCard} rounded-2xl shadow-md border ${bgCardHover} p-5`}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-10 h-10 ${post.authorColor || 'bg-gray-200'} rounded-full flex items-center justify-center text-lg overflow-hidden`}>
+                    {post.authorIcon || '👤'}
+                  </div>
+                  <div>
+                    <h3 className={`font-semibold text-sm ${textPrimary}`}>{post.author}</h3>
+                    <p className={`text-xs ${textMuted}`}>{post.group} · {new Date(post.createdAt).toLocaleDateString()}</p>
+                  </div>
+                </div>
+                <p className={`text-sm leading-relaxed mb-3 ${textSecondary}`}>{post.content}</p>
+                
+                {post.image && (
+                  <div className="mb-3 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                    <img src={post.image} alt="Post" className="w-full max-h-96 object-cover" />
+                  </div>
+                )}
+                {post.video && (
+                  <div className="mb-3 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                    <video src={post.video.url} controls className="w-full max-h-96" />
+                  </div>
+                )}
+
+                <div className={`flex gap-6 pt-3 border-t ${darkMode ? 'border-gray-700' : 'border-blue-100/50'}`}>
+                  <button onClick={() => handleLike(post._id)} className={`text-sm flex items-center gap-1.5 ${post.liked ? 'text-red-500' : darkMode ? 'text-gray-400 hover:text-red-400' : 'text-blue-400 hover:text-red-500'}`}>
+                    {post.liked ? '❤️' : '🤍'} {post.likes}
+                  </button>
+                  <button onClick={() => toggleComments(post._id)} className={`text-sm flex items-center gap-1.5 ${darkMode ? 'text-gray-400 hover:text-blue-400' : 'text-blue-400 hover:text-blue-600'}`}>
+                    💬 {post.comments?.length || 0}
+                  </button>
+                </div>
+
+                {showComments[post._id] && (
+                  <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                    {post.comments?.map((comment, idx) => (
+                      <div key={idx} className="flex gap-3 mb-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>👤</div>
+                        <div className="flex-1">
+                          <div className={`rounded-xl px-4 py-2 ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                            <p className={`text-sm font-semibold ${textPrimary}`}>{comment.user}</p>
+                            <p className={`text-sm ${textSecondary}`}>{comment.text}</p>
+                          </div>
+                          <p className={`text-xs ${textMuted} mt-1`}>{new Date(comment.time).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>👤</div>
+                      <div className="flex-1 flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Écrire un commentaire..."
+                          value={newComment[post._id] || ''}
+                          onChange={(e) => setNewComment({ ...newComment, [post._id]: e.target.value })}
+                          onKeyPress={(e) => e.key === 'Enter' && handleAddComment(post._id)}
+                          className={`flex-1 px-4 py-2 rounded-xl border text-sm ${bgInput} focus:ring-2 focus:ring-indigo-500 ${darkMode ? 'text-white' : 'text-gray-800'}`}
+                        />
+                        <button onClick={() => handleAddComment(post._id)} className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition text-sm">➤</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* ===== MODALS ===== */}
+      {/* STORY MODAL */}
+      {showStoryModal && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+          <div className="relative w-full max-w-md">
+            <button onClick={() => setShowStoryModal(false)} className="absolute top-4 right-4 text-white text-3xl z-10 hover:scale-110 transition">✕</button>
+            <div className="relative bg-gradient-to-br from-pink-500 to-purple-600 rounded-3xl p-8 min-h-[500px] flex flex-col items-center justify-center text-white">
+              <div className="absolute top-4 left-4 right-4 flex gap-1">
+                {stories.map((_, idx) => (
+                  <div key={idx} className={`h-1 flex-1 rounded-full ${idx === storyIndex ? 'bg-white' : 'bg-white/30'}`}></div>
+                ))}
+              </div>
+              <div className="text-8xl mb-4">{stories[storyIndex]?.avatar}</div>
+              <p className="text-2xl font-bold">{stories[storyIndex]?.user}</p>
+              <p className="text-white/70 text-sm mt-2">📸 Story</p>
+            </div>
+            <button onClick={() => { if (storyIndex > 0) setStoryIndex(storyIndex - 1) }} className="absolute left-2 top-1/2 -translate-y-1/2 text-white/50 hover:text-white text-3xl transition">◀</button>
+            <button onClick={() => { if (storyIndex < stories.length - 1) setStoryIndex(storyIndex + 1) }} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/50 hover:text-white text-3xl transition">▶</button>
+          </div>
+        </div>
+      )}
+
+      {/* VIDEO MODAL */}
+      {showVideoModal && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+          <div className={`${bgCard} rounded-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto`}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className={`text-xl font-bold ${textPrimary}`}>▶️ {showVideoModal.title}</h3>
+              <button onClick={() => setShowVideoModal(null)} className={`text-2xl ${darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>✕</button>
+            </div>
+            <div className="bg-black rounded-xl p-8 text-center relative">
+              <div className="absolute top-4 left-4 flex items-center gap-2">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                <span className="text-red-500 text-sm font-medium">EN DIRECT</span>
+                <span className="text-white/60 text-sm ml-2">👁️ {showVideoModal.viewers} spectateurs</span>
+              </div>
+              <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <div className="text-7xl mb-4">📹</div>
+                  <p className="text-white/60 text-sm">🟢 En direct</p>
+                  <button onClick={() => { alert('🔴 Regarder la vidéo en direct'); setShowVideoModal(null) }} className="mt-4 px-6 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition">▶️ Regarder</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POLL MODAL */}
+      {showPollModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`${bgCard} rounded-2xl max-w-md w-full p-6`}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className={`text-2xl font-bold ${textPrimary}`}>📊 Créer un sondage</h2>
+              <button onClick={() => setShowPollModal(false)} className={`text-2xl ${darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>✕</button>
+            </div>
+            <div className="space-y-4">
+              <div><label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Question</label><input type="text" value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} placeholder="Votre question..." className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} /></div>
+              <div><label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Options</label>
+                {pollOptions.map((opt, idx) => (
+                  <input key={idx} type="text" value={opt} onChange={(e) => updatePollOption(idx, e.target.value)} placeholder={`Option ${idx + 1}`} className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 mb-2 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} />
+                ))}
+                <button onClick={addPollOption} className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">+ Ajouter une option</button>
+              </div>
+              <button onClick={handlePollSubmit} className="w-full py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition">📊 Publier</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EVENT MODAL */}
+      {showEventModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`${bgCard} rounded-2xl max-w-md w-full p-6`}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className={`text-2xl font-bold ${textPrimary}`}>📅 Créer un événement</h2>
+              <button onClick={() => setShowEventModal(false)} className={`text-2xl ${darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>✕</button>
+            </div>
+            <div className="space-y-4">
+              <div><label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Titre</label><input type="text" value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="Titre..." className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} /></div>
+              <div><label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Date</label><input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} /></div>
+              <div><label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Heure</label><input type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} /></div>
+              <div><label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Lieu</label><input type="text" value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="Lieu..." className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`} /></div>
+              <button onClick={handleEventSubmit} className="w-full py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition">📅 Publier</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
